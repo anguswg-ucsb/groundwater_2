@@ -1,0 +1,14 @@
+name: "Angus Watters"
+output_dir: '.'
+navbar:
+  title: "US Groundwater"
+  left:
+    - text: "Arizona"
+      href: gw_tmp.html
+    - text: "California"
+      href: ca_gw.html
+output:
+  mikedown::ucsb:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "hide"

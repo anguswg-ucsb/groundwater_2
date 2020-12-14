@@ -1,0 +1,1319 @@
+---
+title: 'Arizona Groundwater research'
+author: "[Angus Watters](https://anguswg-ucsb.github.io/)"
+output:
+  mikedown::ucsb:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "hide"
+---
+
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+
+library(tidyverse)
+library(rmarkdown)     # You need this library to run this template.
+library(mikedown)   
+```
+
+
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = TRUE}
+# Libraries
+library(tidyverse)
+library(sf)
+library(USAboundaries)
+library(sp)
+library(leaflet)
+library(plotly)
+library(lubridate)
+library(RColorBrewer)
+```
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+source("../docs/utils.R") 
+```
+
+<br>
+<br>
+
+# **Measurement threshold** *(1920 - 2019)*
+A minimum threshold of 10 distinct measurements with at least 1 measurement every 5 years was applied to filter for only regularly monitored wells 
+
+***
+
+<br>
+<br>
+
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+join_time = readRDS("../data/az/az-join-time.rds")
+join_spatial = readRDS('../data/az/az-join-spatial.rds')
+
+# THRESHOLDING 
+
+join_spatial = join_spatial[!duplicated(join_spatial$wellid),]
+
+join_time = join_time %>% filter(year_dist >= 5)
+join_spatial = join_spatial %>% filter(wellid %in% join_time$wellid)
+
+join_time = join_time %>% 
+  group_by(wellid)
+join_spatial = join_spatial %>% 
+  group_by(wellid)
+```
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+font = list(
+    family = 'Courier',
+    size = 15,
+    color = 'white'
+  )
+label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font
+  )
+
+x = join_spatial %>%
+  st_transform(4326) %>% 
+  group_by(wellid)
+
+# Arizona state shape (CRS = 5070)
+az = us_states() %>%
+  filter(state_name == 'Arizona') %>% 
+  st_transform(5070)
+
+
+az_outline = az %>% 
+  st_cast('MULTILINESTRING') %>% 
+  st_transform(4326)
+
+
+ama = read_sf('../data/az-ama-shps/Act_Man_Areas.shp') %>% 
+  st_transform(5070) %>% 
+  st_cast("MULTIPOLYGON")
+
+ama2 = ama %>% st_transform(4326)
+
+### AQUIFERS
+aquifer = read_sf('../data/shps/us_aquifers.shp') %>% 
+  st_transform(5070) %>% 
+  st_cast("MULTIPOLYGON")
+
+aquifer2 = aquifer %>% st_transform(4326)
+
+box = az %>% st_transform(4326) %>% 
+  st_bbox() %>% 
+  st_as_sfc()
+temp = st_intersects(aquifer2, box)
+
+aquifer2 = aquifer2[which(lengths(temp) != 0), ]
+
+# COLOR PALLETES 
+#RColorBrewer::display.brewer.all(n=4, exact.n=FALSE)
+
+nb.cols = 10
+col1 = RColorBrewer::brewer.pal(9,"Blues")
+# col2 = brewer.pal(9,"YlOrRd")
+col2 = colorRampPalette(brewer.pal(9,"YlOrRd"))(nb.cols)
+col3 = RColorBrewer::brewer.pal(9,"YlGnBu")
+col4 = RColorBrewer::brewer.pal(9,"Spectral")
+col5 = RColorBrewer::brewer.pal(9,"Greys")
+col6 = palette(c('black', 'white'))
+
+pals1 = colorFactor('cyan', domain = x$dtw)
+pals2 = colorNumeric(col2, domain = c(0, 1500))
+pals3 = colorBin(col3, domain = 1:8)
+pals4 = colorFactor(col4, domain = aquifer2$AQ_NAME)
+pals5 = colorFactor(col6, domain = x$source)
+
+# LEGEND LABELS
+labels = c('0', '100', '200',
+           '300', '400',
+           '500', '600',
+           '700', '800', '900')
+agency_labs = c('ADWR', 'USGS')
+# records every ~6 months
+adwr_spatial = x %>% 
+  filter(source == 'AZ') %>% 
+  select(wellid, dtw, date, source, measurement_dist)
+adwr_spatial = adwr_spatial %>%
+  # filter(dtw < 1000, dtw >= 0) %>% 
+  select(wellid, dtw, date, source, measurement_dist)
+
+# records every ~ 1 month
+usgs_spatial = x %>% 
+  filter(source == 'USGS')
+usgs_spatial = usgs_spatial %>%
+  # filter(dtw < 1000, dtw >= 0) %>% 
+  select(wellid, dtw, date, source, measurement_dist)
+
+r0 =  dtw_range(x, -200, 0) %>% select(wellid, dtw, date,source, measurement_dist)
+
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron, group = 'Base') %>% 
+  addProviderTiles(providers$Esri.WorldTopoMap, group = "Terrain") %>% 
+  addPolygons(data = ama2,
+              fillColor  = ~pals3(OBJECTID),
+              fillOpacity = 0.5,
+              color = 'black',
+              weight = 1,
+              label = ~MAP_LABEL, group = 'AMA') %>%
+  addPolygons(data = aquifer2,
+              fillColor = ~pals4(AQ_NAME),
+              fillOpacity = 0.3,
+              color = 'black',
+              weight = 1,
+              label = ~AQ_NAME, group = 'Aquifer') %>%
+  addPolygons(data = az_outline,
+            fillOpacity = 0.1,
+            color = 'black',
+            weight = 2) %>%
+  addCircleMarkers(data = usgs_spatial, #clusterOptions = markerClusterOptions(interactive()),
+                   radius = 4,
+                   fillColor = ~pals2(dtw), 
+                   fillOpacity = .8, 
+                   color = 'black',
+                   # color = ifelse(r1$source == 'USGS', 'black', NA),
+                   opacity = .8, 
+                   weight = .5,
+                   stroke = T,
+                   popup = leafpop::popupTable(usgs_spatial, feature.id = FALSE,
+                                               row.numbers = FALSE), group = 'USGS') %>% 
+  addCircleMarkers(data = adwr_spatial,
+                   radius = 4, #clusterOptions = markerClusterOptions(interactive()),
+                   fillColor = ~pals2(dtw), 
+                   fillOpacity = .8, 
+                   color = 'black',
+                   # color = ifelse(r2$source == 'USGS', 'black', NA),
+                   opacity = .8, 
+                   weight = .5,
+                   stroke = T,
+                   popup = leafpop::popupTable(adwr_spatial, feature.id = FALSE,
+                                               row.numbers = FALSE), group = 'ADWR') %>% 
+ addCircleMarkers(data = r0, #clusterOptions = markerClusterOptions(interactive()),
+                  radius = 4,
+                   fillColor = ~pals1(dtw), 
+                   fillOpacity = .8, 
+                  color = 'black',
+                   #color = ifelse(r0$source == 'USGS', 'black', NA),
+                   opacity = .8,
+                   weight = .5,
+                   stroke = TRUE,
+                   popup = leafpop::popupTable(r0, feature.id = FALSE,
+                                               row.numbers = FALSE), group = 'Negative depths') %>% 
+  addLayersControl(overlayGroups = c('USGS', 'ADWR', 'Negative depths', 'AMA', 'Aquifer'),
+                   options = layersControlOptions(collapsed = FALSE),
+                   baseGroups = c("Base", 'Terrain')) %>% 
+  addLegend(pal = pals2,
+            values = c(0, 1500),
+            opacity = .9,
+            title = 'Depth to water (ft)', # Title
+            position = "bottomleft",
+            labFormat = function(type, cuts, p) {
+              paste0(labels)}) 
+
+```
+
+
+
+
+
+***
+
+<br>
+<br>
+<br>
+<br>
+
+<br>
+
+# **Active Management Areas**
+The 1980 Arizona Groundwater code established 8 Active management areas (AMA) in areas heavily reliant on mined groundwater. The goal of the AMAs is too achieve safe yield groundwater usage in these heavy groundwater pumping areas.
+
+---
+
+<br>
+<br>
+<br>
+
+## **Joseph City AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+# Joseph City AMA
+joseph_shp = ama2 %>% 
+  filter(OBJECTID == 1) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'JOSEPH CITY')
+joseph_wells = join_time %>% filter(wellid %in% joseph_shp$wellid)
+
+
+plot_test1 = ggplot(data = joseph_wells, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+joseph_ggplotly = ggplotly(plot_test1, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+joseph_ggplotly
+```
+
+<br>
+<br>
+<br>
+
+## **Prescott AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+# Prescott AMA
+presc_shp = ama2 %>% 
+  filter(OBJECTID == 2) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'PRESCOTT')
+presc_wells = join_time %>% filter(wellid %in% presc_shp$wellid)
+
+plot_test2 = ggplot(data = presc_wells, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+prescott_ggplotly = ggplotly(plot_test2, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+prescott_ggplotly
+```
+
+<br>
+<br>
+<br>
+
+## **Pheonix AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+# Pheonix AMA
+pheonix_shp = ama2 %>% 
+  filter(OBJECTID == 3) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'PHOENIX')
+pheonix_wells = join_time %>% filter(wellid %in% pheonix_shp$wellid)
+
+pheonix_filter = pheonix_wells %>% 
+  group_by(wellid) %>%  filter(measurement_dist > 70)
+
+plot_test3 = ggplot(data = pheonix_filter, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+ggplotly(plot_test3, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+```
+
+<br>
+<br>
+<br>
+
+## **Harquahala AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+# Harquahala AMA
+harq_shp = ama2 %>% 
+  filter(OBJECTID == 4) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'HARQUAHALA')
+harq_wells = join_time %>% filter(wellid %in% harq_shp$wellid)
+
+plot_test4 = ggplot(data = harq_wells, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+harq_ggplotly = ggplotly(plot_test4, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+harq_ggplotly
+```
+
+<br>
+<br>
+<br>
+
+## **Pinal AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+
+# Pinal AMA
+pinal_shp = ama2 %>% 
+  filter(OBJECTID == 5) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'PINAL')
+pinal_wells = join_time %>% filter(wellid %in% pinal_shp$wellid)
+
+plot_test5 = ggplot(data = pinal_wells, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+pinal_ggplotly = ggplotly(plot_test5, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+pinal_ggplotly
+```
+
+<br>
+<br>
+<br>
+
+## **Tucson AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+# Tuscon AMA
+tucson_shp = ama2 %>% 
+  filter(OBJECTID == 6) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'TUCSON')
+tucson_wells = join_time %>% filter(wellid %in% tucson_shp$wellid)
+tucson_wells = tucson_wells %>% group_by(wellid)
+
+tucson_filter =tucson_wells %>% 
+  filter(wellid != 6008) %>% 
+  mutate(time_span = max(year) - min(year)) %>% 
+  filter(time_span > 50)
+
+plot_test6 = ggplot(data = tucson_filter, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+
+tucson_ggplotly = ggplotly(plot_test6, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+tucson_ggplotly
+```
+
+<br>
+<br>
+<br>
+
+## **Douglas AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+# Douglas AMA
+douglas_shp = ama2 %>% 
+  filter(OBJECTID == 7) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'DOUGLAS')
+douglas_wells = join_time %>% filter(wellid %in% douglas_shp$wellid)
+
+plot_test7 = ggplot(data = douglas_wells, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+douglas_ggplotly = ggplotly(plot_test7, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+douglas_ggplotly
+```
+
+<br>
+<br>
+<br>
+
+## **Santa Cruz AMA**
+
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+# Santa Cruz AMA
+santacruz_shp = ama2 %>% 
+  filter(OBJECTID == 8) %>% 
+  st_intersection(x) %>% 
+  mutate(name = 'SANTA CRUZ')
+santacruz_wells = join_time %>% filter(wellid %in% santacruz_shp$wellid)
+
+plot_test8 = ggplot(data = santacruz_wells, aes(x = date, y = dtw)) +
+  geom_line(aes(col = wellid), size = 1) +
+  ylim(1000, 0) +
+  geom_smooth(col = 'black') +
+  labs(x = 'Year',
+       y = 'DTW (ft)') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16), 
+        panel.grid.major = element_line(colour = "#808080"),
+        panel.grid.minor = element_line(colour = "#808080", size = 1),
+        strip.text.x = element_text(face = 'bold', size = 10))
+
+santacruz_ggplotly = ggplotly(plot_test8, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE)) %>% 
+  config(displayModeBar = FALSE)
+
+santacruz_ggplotly
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+
+# **Buffer analysis on deep water wells**
+
+***
+
+Investigation of wells below 300ft in which depth has continually decreased. The first plot shows all wells within a certain depth range that have had continuous measurement records for over 50 years. The following plots focus on a specific well in that range, and then a buffer was formed around these wells (12 - 20 km) to then see what is happening to other wells within the same area. The buffer analysis was used on individual wells that displayed dramatic and continual decreases in depth to water.  
+
+
+<br>
+<br>
+<br>
+
+
+
+
+<br>
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+cont_records = join_time %>%
+  filter(wellid != 6008) %>% 
+  mutate(time_span = max(year) - min(year)) %>% 
+  filter(time_span > 50)
+
+```
+
+## **Range: 300 - 500 ft**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+cont2 = cont_records %>% filter(time_span > 65)
+plotRange(cont2, 300, 500)
+```
+
+***
+
+<br>
+<br>
+<br>
+
+### **Well 4573**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE,, out.width = "100%"}
+# RETURNS A TIME SERIES PLOT OF WELLS WITHIN A BUFFER DISTANCE (km)
+plotBuffer(join_spatial, 4573, 12500)
+```
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE,, out.width = "100%"}
+test = join_spatial %>% filter(wellid %in% c('4573', '4740', '3472', '4401',
+                                             '4182', '4993', '5730', '4953', '1853', '5743'))
+
+f = ggplot() +
+  geom_sf(data = az) +
+  geom_sf(data = test, aes(col = wellid), size = 2)
+ggplotly(f)
+```
+
+<br>
+<br>
+<br>
+
+
+### **Well 4740**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 4740, 12500)
+```
+
+
+<br>
+<br>
+<br>
+
+### **Well 3472**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 3472, 12500)
+```
+
+
+
+<br>
+<br>
+<br>
+
+## **Range: 400 - 500 ft**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotRange(cont_records, 400, 500)
+```
+
+
+<br>
+<br>
+<br>
+
+### **Well 4401**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 4401, 12500)
+```
+
+
+<br>
+<br>
+<br>
+
+
+### **Well 4182**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 4182, 12500)
+```
+
+
+<br>
+<br>
+<br>
+
+## **Range: 500 - 600 ft** 
+
+***
+
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotRange(cont_records, 500, 600)
+```
+
+
+<br>
+<br>
+<br>
+
+### **Well 4993**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 4993, 20000)
+```
+
+
+<br>
+<br>
+<br>
+
+### **Well 5730**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 5730, 30000)
+```
+
+<br>
+<br>
+<br>
+
+### **Well 4953**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 4953, 12500)
+```
+
+<br>
+<br>
+<br>
+
+### **Well 1853**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 1853, 20000)
+```
+
+<br>
+<br>
+<br>
+
+### **Well 5743**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo=FALSE, out.width = "100%"}
+plotBuffer(join_spatial, 5743, 20000)
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+# **Negative DTW measurements**
+
+***
+
+A negative DTW reading may indicate groundwater emerging above the surface in the form of a spring. There are 9 wells that recorded negative depth to water readings. In the area of Chino Valley there are 6 wells with negative DTW to water readings all within a 5 km radius of one another. They other 3 wells are located in the far southeast corner of Arizona, nearing the US-Mexico border.
+
+## **Negative Case Rules**
+
+***
+
+<br>
+
+
+- **Case 1a:** Artesian to non-artesian (negative to positive sequentially)
+  - maintained these values
+
+- **Case 1b:** Non-artesian to artesian (positive to negative sequentially, skeptical of these)
+  - kept unless otherwise noted 
+  
+- **Case 1c:** Well with very low depth to water and fluctuation between slightly below ground surface and artesian 
+  - maintained these values
+
+- **Case 1d:** Well appears to have a pause in pumping activity (multiple years), returns to artesian, and then is pumped again 
+  - maintained these values 
+
+- **Case 2a:** Measurements are sequential except for a random negative, therefore was likely a recording error
+  - changed negative value to positive
+
+- **Case 2b:** Measurements are sequential except for periods of negative values that appear to be recorded incorrectly 
+  - changed negative value to positive
+
+- **Case 2c:** Measurements are sequential and within reason for well depth however all measurements for that well are negative and are likely recorded incorrectly
+  - compared the well spatially with others to determine if artesian levels would be appropriate, and if not, changed to positive values
+
+- **Case 3a:** Measurements are sequential except for truly wonky number which doesn’t make sense
+  - removed this observation
+  
+- **Case 3b:** Measurements are sequential and then dataset changes to record 0 values only, or some other illogical number continuously, which does not make sense
+  - removed these wells entirely 
+
+***
+
+<br>
+<br>
+<br>
+<br>
+
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+cases = data.frame(cases = c('1a', '1b', '1c', '1d', '2a', '2b', '2c', '3a', '3b'), wells = c(3, 0, 6, 0, 0, 0, 3, 0, 1))
+
+knitr::kable(cases, caption = 'Negative wells in Arizona',
+             col.names = c('Cases', 'Occurances'))
+```
+### **Negative DTW plots**
+
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+negatives = join_time %>% filter(year_dist >= 5, dtw <= 0)
+neg_time = join_time %>% filter(wellid %in% negatives$wellid)
+neg_time = neg_time %>% 
+  mutate(case = case_when(wellid == 5490 ~ "1A",
+                          wellid == 5534 ~ "1A",
+                          wellid == 5538 ~ "1A",
+                          wellid == 222 ~ "1C",
+                          wellid == 226 ~ "1C",
+                          wellid == 259 ~ "1C",
+                          wellid == 2633 ~ "1C",
+                          wellid == 5240 ~ "1C",
+                          wellid == 5985 ~ "1C",
+                          wellid == 1 ~ "2C",
+                          wellid == 524 ~ "2C",
+                          wellid == 5503 ~ "2C",
+                          wellid == 5506 ~ "3B")) 
+
+
+case_1a = neg_time %>% filter(case == '1A')
+spatial_1a = join_spatial %>% filter(wellid %in% neg_time$wellid) %>% 
+    mutate(case = case_when(wellid == 5490 ~ "1A",
+                          wellid == 5534 ~ "1A",
+                          wellid == 5538 ~ "1A",
+                          wellid == 222 ~ "1C",
+                          wellid == 226 ~ "1C",
+                          wellid == 259 ~ "1C",
+                          wellid == 2633 ~ "1C",
+                          wellid == 5240 ~ "1C",
+                          wellid == 5985 ~ "1C",
+                          wellid == 1 ~ "2C",
+                          wellid == 524 ~ "2C",
+                          wellid == 5503 ~ "2C",
+                          wellid == 5506 ~ "3B"))
+
+case_1c = neg_time %>% filter(case == '1C')
+case_2c = neg_time %>% filter(case == '2C')
+case_3b = neg_time %>% filter(case == '3B')
+
+map_1a = ggplot() +
+  geom_sf(data = az) +
+  geom_sf(data = spatial_1a, aes(fill = wellid, col = case), size = 2) +
+  labs(fill = '',
+    col = '(WELL, CASE)')
+
+maply_1a = ggplotly(map_1a, tooltip = c('wellid', 'case')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font)
+maply_1a
+
+
+case_1c = neg_time %>% filter(case == '1C')
+case_2c = neg_time %>% filter(case == '2C')
+case_3b = neg_time %>% filter(case == '3B')
+
+```
+
+***
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+
+
+### **Cases**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+
+case_1c = neg_time %>% filter(case == '1C')
+case_2c = neg_time %>% filter(case == '2C')
+case_3b = neg_time %>% filter(case == '3B')
+  font = list(
+    family = 'Courier',
+    size = 15,
+    color = 'white')
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+  gg_1a = ggplot(data = case_1a, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    geom_hline(aes(yintercept = 0), size = 1) +
+    scale_y_reverse() +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well',
+         title = 'Case 1A') + 
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1),
+          legend.title = element_text(colour="black", size=16, face="bold"),
+          legend.text = element_text(colour="black", size=10, face="bold"))
+  plot_1a = ggplotly(gg_1a, tooltip = c('x', 'y', 'wellid', 'case')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot_1a
+```
+
+<br>
+<br>
+<br>
+
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+    gg_1c = ggplot(data = case_1c, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    geom_hline(aes(yintercept = 0), size = 1) +
+    scale_y_reverse() +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well',
+         title = 'Case 1C') + 
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1),
+          legend.title = element_text(colour="black", size=16, face="bold"),
+          legend.text = element_text(colour="black", size=10, face="bold"))
+  plot_1c = ggplotly(gg_1c, tooltip = c('x', 'y', 'wellid', 'case')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot_1c
+```
+
+<br>
+<br>
+<br>
+
+
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+  
+    gg_2c = ggplot(data = case_2c, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    geom_hline(aes(yintercept = 0), size = 1) +
+    scale_y_reverse() +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well',
+         title = 'Case 2C') + 
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1),
+          legend.title = element_text(colour="black", size=16, face="bold"),
+          legend.text = element_text(colour="black", size=10, face="bold"))
+  plot_2c = ggplotly(gg_2c, tooltip = c('x', 'y', 'wellid', 'case')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot_2c
+```
+
+<br>
+<br>
+<br>
+
+
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+  
+    gg_3b = ggplot(data = case_3b, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    geom_hline(aes(yintercept = 0), size = 1) +
+    scale_y_reverse() +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well',
+         title = 'Case 3B') + 
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1),
+          legend.title = element_text(colour="black", size=16, face="bold"),
+          legend.text = element_text(colour="black", size=10, face="bold"))
+  plot_3b = ggplotly(gg_3b, tooltip = c('x', 'y', 'wellid', 'case')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot_3b
+```
+
+
+
+<br>
+<br>
+<br>
+
+
+### **Chino Valley**
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+
+neg4 = join_spatial %>% filter(wellid == 5534)
+buff4 = st_buffer(join_spatial[neg4, ], 12500)
+near_neg4 = st_intersection(join_spatial, buff4)
+near_time4 = join_time %>% filter(wellid %in% near_neg4$wellid)
+plotNegativeWells(near_time4)
+```
+
+<br>
+<br>
+<br>
+<br><br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+# **Functions**
+
+***
+
+
+```{r, message= FALSE, warning = FALSE, eval=FALSE, echo=TRUE}
+### PLOT AN INDIVIDUAL WELL BY WELL ID (DTW TIME SERIES)
+
+### PLOT AN INDIVIDUAL WELL BY WELL ID (DTW TIME SERIES)
+plotWell = function(df_time, num) {
+  font = list(
+    family = 'Courier',
+    size = 15,
+    color = 'white')
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+  well = df_time %>% filter(wellid == num)
+  gg = ggplot(data = well, aes(x = date, y = dtw)) +
+    geom_line(data = well, aes(y = dtw, col = wellid), size = 1) +
+    ylim(max(well$dtw) + 100, 0) +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well') +  
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1))
+  plot = ggplotly(gg, tooltip = c('x', 'y', 'wellid')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot
+}
+
+# PLOTS WELL DTW TIME SERIES WITHIN A RANGE (MIN, MAX)
+plotRange = function(df_time, min, max) {
+  font = list(
+    family = 'Courier',
+    size = 15,
+    color = 'white')
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+  df_time = df_time %>% filter(dtw <= max, dtw >= min) %>% 
+    arrange(desc(date))
+  gg = ggplot(data = df_time, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    ylim(max(df_time$dtw) + 50, min(df_time$dtw)) +
+    labs(x = 'Year',
+         y = 'DTW (ft)') + 
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1))
+  plot = ggplotly(gg, tooltip = c('x', 'y', 'wellid')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot
+  
+}
+
+# PLOTS WELL DTW TIME SERIES FROM DATAFRAME
+plotMultipleWells = function(df_time) {
+  font = list(
+    family = 'Courier',
+    size = 15,
+    color = 'white')
+   label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+
+  gg = ggplot(data = df_time, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    ylim(max(df_time$dtw) + 50, 0) +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well') +  
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1))
+  plot = ggplotly(gg, tooltip = c('x', 'y', 'wellid')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot
+}
+
+# IDENTICAL FUNCTION TO plotMultipleWells() BUT WILL PLOT ABOVE ZERO ON THE Y-AXIS
+plotNegativeWells = function(df_time) {
+  font = list(
+    family = 'Courier',
+    size = 15,
+    color = 'white')
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+  gg = ggplot(data = df_time, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    geom_hline(aes(yintercept = 0), size = 1) +
+    scale_y_reverse() +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well') + 
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+          axis.text.x = element_text(color="black", size=14), 
+          axis.text.y = element_text(color="black", size=14), 
+          axis.title.x = element_text(face="bold", color="black", size=16), 
+          axis.title.y = element_text(face="bold", color="black", size=16), 
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1),
+          legend.title = element_text(colour="black", size=16, face="bold"),
+          legend.text = element_text(colour="black", size=10, face="bold"))
+  plot = ggplotly(gg, tooltip = c('x', 'y', 'wellid')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot
+}
+
+# RETURNS A TIME SERIES PLOT OF WELLS WITHIN A BUFFER DISTANCE (km)
+plotBuffer = function(df, id, buffer) {
+  font = list(
+    family = 'Courier',
+    size = 15,
+    color = 'white')
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+  well = df %>% filter(wellid == !!id)
+  buff = st_buffer(df[well, ], buffer)
+  nearby =st_intersection(df, buff)         
+  df_time = join_time %>% filter(time_span > 50, wellid %in% nearby$wellid) 
+  
+  gg = ggplot(data = df_time, aes(x = date, y = dtw)) +
+    geom_line(aes(y = dtw, col = wellid), size = 1) +
+    ylim(1000, 0) +
+    labs(x = 'Year',
+         y = 'DTW (ft)',
+         col = 'Well') +
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5),
+          axis.text.x = element_text(color="black", size=14),
+          axis.text.y = element_text(color="black", size=14),
+          axis.title.x = element_text(face="bold", color="black", size=16),
+          axis.title.y = element_text(face="bold", color="black", size=16),
+          panel.grid.major = element_line(colour = "#808080"),
+          panel.grid.minor = element_line(colour = "#808080", size = 1))
+  plot = ggplotly(gg, tooltip = c('x', 'y', 'wellid')) %>%
+    style(hoverlabel = label) %>% 
+    layout(font = font, 
+           yaxis = list(fixedrange = TRUE)) %>% 
+    config(displayModeBar = FALSE)
+  plot
+}
+
+
+# PLOTS A BUFFER AROUND SPECIFIED WELL AND LOCATES OTHER WELLS INSIDE THE BUFFER AREA
+buffer_fun = function(df, well, buff, state) {
+  buffer = st_buffer(df[well,], buff)
+  near1 = st_intersection(df[,], buffer) %>% filter(measurement_dist >= 10)
+  
+  plot = ggplot() + 
+    geom_sf(data = state) +
+    geom_sf(data = buffer, fill = NA) + 
+    geom_sf(data = near1, col = "red", size = .5) + 
+    labs(caption = paste(nrow(near1), 'wells')) +
+    theme_void() +
+    theme(plot.caption = element_text(size = 22, face = "bold", hjust = 0.5))
+  print(plot)
+  return(near1)
+}
+
+# RETURNS DATAFRAME OF WELLS IN DTW RANGE (MIN - MAX)
+dtw_range = function(df, min, max) {
+  df = df %>% filter(dtw <= max, dtw >= min) %>% 
+    mutate(sd = sd(dtw)) %>% 
+    arrange(desc(date))
+  return(df)
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

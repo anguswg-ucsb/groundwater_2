@@ -1,0 +1,87 @@
+---
+title: ""
+output:
+  mikedown::ucsb:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "hide"
+---
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+library(tidyverse)
+library(rmarkdown)     # You need this library to run this template.
+library(mikedown)   
+```
+
+<br> 
+
+# **Background**
+
+***
+
+
+The USGS National Water Information System (NWIS) provides public access to USGS Water Data. NWIS provides data from over 900,000 groundwater wells throughout the United States dating back to 1899. The goal of this research is to investigate depth to water fluctuations, analyze geospatial patterns and trends in well depth, and to relate this information to various sustainable groundwater management approaches implemented by state governments.  
+
+There are 62 principal aquifers in the United States. 
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+library(tidyverse)
+library(sf)
+library(USAboundaries)
+library(RColorBrewer)
+library(ggspatial)
+
+```
+
+<br>
+<br>
+<br>
+<br>
+
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE, fig.height=16, fig.width = 22}
+conus = us_states() %>%
+  filter(!name %in% c('Alaska', 'Hawaii', 'Puerto Rico')) %>% 
+  st_transform(5070)
+
+### AQUIFERS
+aquifer = read_sf('../data/shps/us_aquifers.shp') %>% 
+  st_transform(5070) %>% 
+  st_cast("MULTIPOLYGON")
+
+
+box = conus %>% 
+   st_bbox() %>% 
+   st_as_sfc()
+temp = st_intersects(aquifer, box)
+# 
+aquifer = aquifer[which(lengths(temp) != 0), ]
+
+aquifer = aquifer %>% filter(AQ_NAME != 'Other rocks')
+num = length(unique(aquifer$AQ_NAME))
+
+col4 = colorRampPalette(brewer.pal(9,"Spectral"))(num)
+
+
+ggplot() +
+  geom_sf(data = conus, fill = 'azure', size = .8) +
+  geom_sf(data = aquifer, aes(fill = AQ_NAME)) +
+  scale_fill_manual(values = col4) +
+  labs(fill = 'Aquifer') +
+  theme(legend.position = "bottom",
+        axis.text = element_text(size = 14),
+        legend.text = element_text(size = 13),
+        legend.title = element_text(face = 'bold', size = 14),
+        legend.box.spacing = unit(2.0, 'cm'),
+        legend.spacing  = unit(1.5, 'cm'))
+  # guides(color = guide_legend(override.aes = list(size = 2)))
+  # theme(legend.title = element_text(size = 3), 
+  #              legend.text = element_text(size = 3)) +
+  # guides(shape = guide_legend(override.aes = list(size = 0.5)))
+  # theme(legend.key=element_blank(), legend.key.size=unit(1,"point")) + 
+  # guides(colour=guide_legend(nrow=30))
+  # annotation_scale(location = "bl", width_hint = 0.5) +
+  # annotation_north_arrow(location = "bl", which_north = "true", 
+  #                        pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
+  #                        style = north_arrow_fancy_orienteering) 
+```

@@ -1,0 +1,180 @@
+---
+title: 'California Groundwater research'
+author: "[Angus Watters](https://anguswg-ucsb.github.io/)"
+output:
+  mikedown::ucsb:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "hide"
+---
+
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+
+library(tidyverse)
+library(rmarkdown)     # You need this library to run this template.
+library(mikedown)   
+```
+
+
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = TRUE}
+# Libraries
+library(tidyr)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(sf)
+library(USAboundaries)
+library(sp)
+library(leaflet)
+library(RColorBrewer)
+```
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+source("../docs/utils.R") 
+```
+
+<br>
+<br>
+
+# **Measurement threshold** *(2000 - 2020)*
+A minimum threshold of 10 distinct measurements with at least 1 measurement every 5 years was applied to filter for only the regularly monitored wells. investigate regularly monitored wells 
+
+***
+
+<br>
+<br>
+
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE}
+# THRESHOLD 
+# READ IN DATA ---------------- (USGS + STATE DATA JOINED)
+join_time = readRDS('../data/ca/ca-join-all.rds')
+join_spatial = readRDS('../data/ca/ca-join-spatial.rds')
+
+# **** RUN AFTER READING IN DATA ****
+
+# THRESHOLD ------ (10 - 20 DISTINCT MEASUREMENTS & 5 DIST YEARS)
+join_time = join_time %>%  filter(measurement_dist >= 20, year_dist >= 5)
+join_spatial = join_spatial %>% filter(measurement_dist >= 20, year_dist >= 5)
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+
+# LEAFLET ---- (CRS = 4326)
+x = join_spatial %>%
+  st_transform(4326) %>% 
+  group_by(wellid)
+
+# COLOR PALETTES 
+
+nb.cols = 10
+col1 = RColorBrewer::brewer.pal(9,"Blues")
+# col2 = brewer.pal(9,"YlOrRd")
+col2 = colorRampPalette(brewer.pal(9,"YlOrRd"))(nb.cols)
+col3 = RColorBrewer::brewer.pal(9,"YlGnBu")
+col4 = RColorBrewer::brewer.pal(9,"Spectral")
+col5 = RColorBrewer::brewer.pal(9,"Greys")
+col6 = palette(c('black', 'white'))
+
+pals1 = colorFactor('navy', domain = x$dtw)
+pals2 = colorNumeric(col2, domain = c(0, 1000))
+pals3 = colorBin(col3, domain = 1:8)
+# pals4 = colorFactor(col4, domain = aquifer2$AQ_NAME)
+pals5 = colorFactor(col6, domain = x$source)
+
+# LEGEND LABELS
+labels = c('0', '100', '200',
+           '300', '400',
+           '500', '600',
+           '700', '800', '900', '1000')
+agency_labs = c('DWR', 'USGS', 'EMW')
+
+ 
+# records 4 times a year
+emw_spatial = x %>% 
+  filter(source == 'Environmental Monitoring Well') 
+emw_spatial = emw_spatial %>%
+  filter(dtw < 1000, dtw >= 0) %>% 
+  select(wellid, dtw, date, source, measurement_dist)
+
+# records every ~6 months
+dwr_spatial = x %>% 
+  filter(source == 'DWR Well')
+dwr_spatial = dwr_spatial %>%
+  filter(dtw < 1000, dtw >= 0) %>% 
+  select(wellid, dtw, date, source, measurement_dist)
+
+# records every ~ 1 month
+usgs_spatial = x %>% 
+  filter(source == 'USGS')
+usgs_spatial = usgs_spatial %>%
+  filter(dtw < 1000, dtw >= 0) %>% 
+  select(wellid, dtw, date, source, measurement_dist)
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron, group = 'Base') %>% 
+  addCircleMarkers(data = usgs_spatial, #clusterOptions = markerClusterOptions(interactive()),
+                   radius = 4,
+                   fillColor = ~pals2(dtw), 
+                   fillOpacity = .8, 
+                   color = 'black',
+                   # color = ifelse(r1$source == 'USGS', 'black', NA),
+                   opacity = .8, 
+                   weight = .5,
+                   stroke = T,
+                   popup = leafpop::popupTable(usgs_spatial, feature.id = FALSE,
+                                               row.numbers = FALSE), group = 'USGS') %>% 
+  addCircleMarkers(data = dwr_spatial,
+                   radius = 4, #clusterOptions = markerClusterOptions(interactive()),
+                   fillColor = ~pals2(dtw), 
+                   fillOpacity = .8, 
+                   color = 'black',
+                   # color = ifelse(r2$source == 'USGS', 'black', NA),
+                   opacity = .8, 
+                   weight = .5,
+                   stroke = T,
+                   popup = leafpop::popupTable(dwr_spatial, feature.id = FALSE,
+                                               row.numbers = FALSE), group = 'DWR') %>% 
+  addCircleMarkers(data = emw_spatial,
+                   radius = 4, #clusterOptions = markerClusterOptions(interactive()),
+                   fillColor = ~pals2(dtw), 
+                   fillOpacity = .8,
+                   color = 'black',
+                   # color = ifelse(r2$source == 'USGS', 'black', NA),
+                   opacity = .8, 
+                   weight = .5,
+                   stroke = T,
+                   popup = leafpop::popupTable(emw_spatial, feature.id = FALSE,
+                                               row.numbers = FALSE), group = 'EMW') %>% 
+  addLayersControl(overlayGroups = c('USGS', 'DWR', 'EMW'),
+                   options = layersControlOptions(collapsed = FALSE),
+                   baseGroups = c("Base")) %>% 
+  addLegend(pal = pals2,
+            values = c(0, 1000),
+            opacity = .9,
+            title = 'Depth to water (ft)', # Title
+            position = "bottomleft",
+            labFormat = function(type, cuts, p) {
+              paste0(labels)})
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
