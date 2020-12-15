@@ -65,7 +65,7 @@ join_spatial = join_spatial %>% filter(measurement_dist >= 20, year_dist >= 5)
 
 
 
-```{r, message=FALSE, warning=FALSE, echo=TRUE}
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
 
 # LEAFLET ---- (CRS = 4326)
 x = join_spatial %>%

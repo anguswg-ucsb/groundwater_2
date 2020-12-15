@@ -30,7 +30,8 @@ library(sf)
 library(USAboundaries)
 library(RColorBrewer)
 library(ggspatial)
-
+library(plotly)
+library(rnaturalearthdata)
 ```
 
 <br>
@@ -39,7 +40,7 @@ library(ggspatial)
 <br>
 
 
-```{r, message=FALSE, warning=FALSE, echo=FALSE, fig.height=16, fig.width = 22}
+```{r, message=FALSE, warning=FALSE, echo=FALSE, out.width='100%'}
 conus = us_states() %>%
   filter(!name %in% c('Alaska', 'Hawaii', 'Puerto Rico')) %>% 
   st_transform(5070)
@@ -62,26 +63,56 @@ num = length(unique(aquifer$AQ_NAME))
 
 col4 = colorRampPalette(brewer.pal(9,"Spectral"))(num)
 
-
-ggplot() +
-  geom_sf(data = conus, fill = 'azure', size = .8) +
-  geom_sf(data = aquifer, aes(fill = AQ_NAME)) +
+mex = countries110 %>% 
+  st_as_sf() %>% 
+  filter(sovereignt == 'Mexico') %>% 
+  st_transform(5070)
+  
+font = list(
+  family = 'Courier',
+  size = 15,
+  color = 'white')
+label = list(
+  bgcolor = '#232F34',
+  bordercolor = 'transparent',
+  font = font)
+aquifers_gg = ggplot() +
+  geom_sf(data = conus, fill = 'azure', size = .7) +
+  geom_sf(data = aquifer, aes(fill = AQ_NAME, text = paste0('', AQ_NAME)), size = .6) +
   scale_fill_manual(values = col4) +
-  labs(fill = 'Aquifer') +
+  labs(fill = 'Aquifers') +
   theme(legend.position = "bottom",
         axis.text = element_text(size = 14),
-        legend.text = element_text(size = 13),
+        legend.text = element_text(size = 11),
         legend.title = element_text(face = 'bold', size = 14),
         legend.box.spacing = unit(2.0, 'cm'),
         legend.spacing  = unit(1.5, 'cm'))
-  # guides(color = guide_legend(override.aes = list(size = 2)))
-  # theme(legend.title = element_text(size = 3), 
-  #              legend.text = element_text(size = 3)) +
-  # guides(shape = guide_legend(override.aes = list(size = 0.5)))
-  # theme(legend.key=element_blank(), legend.key.size=unit(1,"point")) + 
-  # guides(colour=guide_legend(nrow=30))
-  # annotation_scale(location = "bl", width_hint = 0.5) +
-  # annotation_north_arrow(location = "bl", which_north = "true", 
-  #                        pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
-  #                        style = north_arrow_fancy_orienteering) 
+
+aq_plotly = ggplotly(aquifers_gg, height = 950, width = 1800,
+         tooltip=c("text")) %>% 
+  style(hoverlabel = label) %>% 
+  layout(font = font)
+ppc <- htmltools::div(aq_plotly, align="center" )  # Result is now an HTML object
+htmltools::save_html( ppc, "test.html" ) 
+ppc
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

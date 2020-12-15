@@ -169,10 +169,6 @@ leaflet() %>%
               color = 'black',
               weight = 1,
               label = ~AQ_NAME, group = 'Aquifer') %>%
-  addPolygons(data = az_outline,
-            fillOpacity = 0.1,
-            color = 'black',
-            weight = 2) %>%
   addCircleMarkers(data = usgs_spatial, #clusterOptions = markerClusterOptions(interactive()),
                    radius = 4,
                    fillColor = ~pals2(dtw), 
