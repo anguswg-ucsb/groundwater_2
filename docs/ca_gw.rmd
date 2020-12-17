@@ -41,7 +41,7 @@ source("../docs/utils.R")
 <br>
 <br>
 
-# **Measurement threshold** *(2000 - 2020)*
+# **Measurement threshold** *(1930 - 2020)*
 A minimum threshold of 10 distinct measurements with at least 1 measurement every 5 years was applied to filter for only the regularly monitored wells. investigate regularly monitored wells 
 
 ***
@@ -71,6 +71,12 @@ join_spatial = join_spatial %>% filter(measurement_dist >= 20, year_dist >= 5)
 x = join_spatial %>%
   st_transform(4326) %>% 
   group_by(wellid)
+
+# CA COUNTIES
+counties = us_counties() %>% 
+  filter(state_name == 'California') %>% 
+  st_cast('MULTIPOLYGON') %>% 
+  st_transform(4326)
 
 # COLOR PALETTES 
 
@@ -102,24 +108,30 @@ emw_spatial = x %>%
   filter(source == 'Environmental Monitoring Well') 
 emw_spatial = emw_spatial %>%
   filter(dtw < 1000, dtw >= 0) %>% 
-  select(wellid, dtw, date, source, measurement_dist)
+  select(dtw, gw_elev, date, date_min, date_max, measurement_dist, source, wellid)
 
 # records every ~6 months
 dwr_spatial = x %>% 
   filter(source == 'DWR Well')
 dwr_spatial = dwr_spatial %>%
   filter(dtw < 1000, dtw >= 0) %>% 
-  select(wellid, dtw, date, source, measurement_dist)
+  select(dtw, gw_elev, date, date_min, date_max, measurement_dist, source, wellid)
 
 # records every ~ 1 month
 usgs_spatial = x %>% 
   filter(source == 'USGS')
 usgs_spatial = usgs_spatial %>%
   filter(dtw < 1000, dtw >= 0) %>% 
-  select(wellid, dtw, date, source, measurement_dist)
-
+  select(dtw, gw_elev, date, date_min, date_max, measurement_dist, source, wellid)
 leaflet() %>%
   addProviderTiles(providers$CartoDB.Positron, group = 'Base') %>% 
+    addPolygons(data = counties,
+              fillColor  = 'darkcyan',
+              fillOpacity = 0.2,
+              color = 'black',
+              weight = 1,
+              label = ~name,
+              group = 'Counties') %>% 
   addCircleMarkers(data = usgs_spatial, #clusterOptions = markerClusterOptions(interactive()),
                    radius = 4,
                    fillColor = ~pals2(dtw), 

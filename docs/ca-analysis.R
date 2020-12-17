@@ -13,6 +13,20 @@ library(RColorBrewer)
 
 source("docs/utils.R")
 
+
+saveRDS(join_time, file = 'data/ca/ca-join-all.rds')
+saveRDS(join_spatial, file = 'data/ca/ca-join-spatial.rds')
+
+join_spatial = join_spatial %>%
+  mutate(time_span = max(year) - min(year))
+
+join_spatial = join_spatial %>% 
+  select(wellid, date, dtw, gw_elev,
+                                 year, date_min, date_max,
+                                 source, measurement_dist, year_dist, time_span,
+                                 measure_period, county,
+                                 dec_date, site_id = site_id.x)
+
 #################################################################
 ######################### THRESHOLD #############################
 #################################################################
@@ -41,6 +55,28 @@ counties = us_counties() %>%
 
 tmp1 = usgs_spatial %>% 
   st_transform(5070)
+
+county_tmp = counties %>% select(name)
+
+county_tmp2 = st_intersection(county_tmp, join_spatial) %>% 
+  st_drop_geometry()
+county_tmp2 = filter(wellid == 31575)
+
+join_spatial = left_join(join_spatial, select(join_time, wellid, time_span), by = "wellid") 
+
+tmp4 = join_time %>% 
+  group_by(wellid) %>% 
+  arrange(desc(date)) %>% 
+  slice(n =1)
+join_spatial = left_join(join_spatial, select(county_tmp2, wellid, name), by = "wellid") 
+joseph_outline = ama2 %>% 
+  filter(OBJECTID == 1) 
+
+joseph_shp = ama2 %>% 
+  filter(OBJECTID == 1) %>% 
+  st_intersection(x)
+joseph_wells = join_time %>% filter(wellid %in% joseph_shp$wellid)
+joseph_pts = join_spatial %>% filter(wellid %in% joseph_shp$wellid)
 
 
 gg_tmp = ggplot() +
@@ -72,6 +108,36 @@ tmp3 = join_spatial %>%
   filter(wellid %in% tmp2$wellid)
 
 plotMultipleWells(tmp2)
+
+#################################################################
+######################## NEGATIVE DTW ###########################
+#################################################################
+negatives = join_time %>% filter(dtw < 0)
+
+neg_time = join_time %>% filter(wellid %in% negatives$wellid)
+
+
+tmp1 = neg_time %>%
+  arrange(measurement_dist)
+  split(neg_time$wellid) %>% 
+  head(3) %>% 
+  bind_rows()
+  
+tmp2 = neg_time %>%
+  filter(wellid %in% c(87209, 70968, 87298))
+
+tmp2$level = cut(tmp2$dtw,c(-40,-30,-20,-10,-5, -1, 0, 2))
+
+
+tmp2 = tmp2 %>% 
+  group_by(wellid, level) %>% 
+  mutate(freq = n())
+plotNegativeWells(tmp2)
+
+data = sample(0:40, 200, replace=T)
+a = c(-20,-10);b = c(-10,-5);c = c(-5, 5)
+my_bins = matrix(rbind(a, b, c), ncol=2)
+shx = lattice::shingle(tmp2$dtw, intervals=my_bins)
 #################################################################
 ########################## LEAFLET ##############################
 #################################################################
@@ -192,10 +258,6 @@ leaflet() %>%
   #           opacity = 0.8,
   #           title = '',
   #           position = "bottomleft")
-
-#################################################################
-#################################################################
-
 
 
 #################################################################

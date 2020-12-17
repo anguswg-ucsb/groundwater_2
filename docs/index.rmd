@@ -59,8 +59,9 @@ temp = st_intersects(aquifer, box)
 aquifer = aquifer[which(lengths(temp) != 0), ]
 
 aquifer = aquifer %>% filter(AQ_NAME != 'Other rocks')
-num = length(unique(aquifer$AQ_NAME))
 
+# FILL COLOR
+num = length(unique(aquifer$AQ_NAME))
 col4 = colorRampPalette(brewer.pal(9,"Spectral"))(num)
 
 mex = countries110 %>% 
