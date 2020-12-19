@@ -30,6 +30,8 @@ library(leaflet)
 library(plotly)
 library(lubridate)
 library(RColorBrewer)
+library(knitr)
+library(kableExtra)
 ```
 
 ```{r, message= FALSE, warning = FALSE, echo = FALSE}
@@ -139,19 +141,19 @@ agency_labs = c('ADWR', 'USGS')
 # records every ~6 months
 adwr_spatial = x %>% 
   filter(source == 'AZ') %>% 
-  select(wellid, dtw, date, source, measurement_dist)
+    select(dtw, date, date_min, date_max, measurement_dist, source, wellid)
 adwr_spatial = adwr_spatial %>%
   # filter(dtw < 1000, dtw >= 0) %>% 
-  select(wellid, dtw, date, source, measurement_dist)
+    select(dtw, date, date_min, date_max, measurement_dist, source, wellid)
 
 # records every ~ 1 month
 usgs_spatial = x %>% 
   filter(source == 'USGS')
 usgs_spatial = usgs_spatial %>%
   # filter(dtw < 1000, dtw >= 0) %>% 
-  select(wellid, dtw, date, source, measurement_dist)
+  select(dtw, date, date_min, date_max, measurement_dist, source, wellid)
 
-r0 =  dtw_range(x, -200, 0) %>% select(wellid, dtw, date,source, measurement_dist)
+r0 =  dtw_range(x, -200, 0) %>%  select(dtw, date, date_min, date_max, measurement_dist, source, wellid)
 
 
 leaflet() %>%
@@ -178,7 +180,7 @@ leaflet() %>%
                    opacity = .8, 
                    weight = .5,
                    stroke = T,
-                   popup = leafpop::popupTable(usgs_spatial, feature.id = FALSE,
+                   popup = leafpop::popupTable(st_drop_geometry(usgs_spatial), feature.id = FALSE,
                                                row.numbers = FALSE), group = 'USGS') %>% 
   addCircleMarkers(data = adwr_spatial,
                    radius = 4, #clusterOptions = markerClusterOptions(interactive()),
@@ -189,7 +191,7 @@ leaflet() %>%
                    opacity = .8, 
                    weight = .5,
                    stroke = T,
-                   popup = leafpop::popupTable(adwr_spatial, feature.id = FALSE,
+                   popup = leafpop::popupTable(st_drop_geometry(adwr_spatial), feature.id = FALSE,
                                                row.numbers = FALSE), group = 'ADWR') %>% 
  addCircleMarkers(data = r0, #clusterOptions = markerClusterOptions(interactive()),
                   radius = 4,
@@ -200,7 +202,7 @@ leaflet() %>%
                    opacity = .8,
                    weight = .5,
                    stroke = TRUE,
-                   popup = leafpop::popupTable(r0, feature.id = FALSE,
+                   popup = leafpop::popupTable(st_drop_geometry(r0), feature.id = FALSE,
                                                row.numbers = FALSE), group = 'Negative depths') %>% 
   addLayersControl(overlayGroups = c('USGS', 'ADWR', 'Negative depths', 'AMA', 'Aquifer'),
                    options = layersControlOptions(collapsed = FALSE),
@@ -790,31 +792,31 @@ A negative DTW reading may indicate groundwater emerging above the surface in th
 <br>
 
 
-- **Case 1a:** Artesian to non-artesian (negative to positive sequentially)
+- **Case 1A:** Artesian to non-artesian (negative to positive sequentially)
   - maintained these values
 
-- **Case 1b:** Non-artesian to artesian (positive to negative sequentially, skeptical of these)
+- **Case 1B:** Non-artesian to artesian (positive to negative sequentially, skeptical of these)
   - kept unless otherwise noted 
   
-- **Case 1c:** Well with very low depth to water and fluctuation between slightly below ground surface and artesian 
+- **Case 1C:** Well with very low depth to water and fluctuation between slightly below ground surface and artesian 
   - maintained these values
 
-- **Case 1d:** Well appears to have a pause in pumping activity (multiple years), returns to artesian, and then is pumped again 
+- **Case 1D:** Well appears to have a pause in pumping activity (multiple years), returns to artesian, and then is pumped again 
   - maintained these values 
 
-- **Case 2a:** Measurements are sequential except for a random negative, therefore was likely a recording error
+- **Case 2A:** Measurements are sequential except for a random negative, therefore was likely a recording error
   - changed negative value to positive
 
-- **Case 2b:** Measurements are sequential except for periods of negative values that appear to be recorded incorrectly 
+- **Case 2B:** Measurements are sequential except for periods of negative values that appear to be recorded incorrectly 
   - changed negative value to positive
 
-- **Case 2c:** Measurements are sequential and within reason for well depth however all measurements for that well are negative and are likely recorded incorrectly
+- **Case 2C:** Measurements are sequential and within reason for well depth however all measurements for that well are negative and are likely recorded incorrectly
   - compared the well spatially with others to determine if artesian levels would be appropriate, and if not, changed to positive values
 
-- **Case 3a:** Measurements are sequential except for truly wonky number which doesn’t make sense
+- **Case 3A:** Measurements are sequential except for truly wonky number which doesn’t make sense
   - removed this observation
   
-- **Case 3b:** Measurements are sequential and then dataset changes to record 0 values only, or some other illogical number continuously, which does not make sense
+- **Case 3B:** Measurements are sequential and then dataset changes to record 0 values only, or some other illogical number continuously, which does not make sense
   - removed these wells entirely 
 
 ***
@@ -826,10 +828,20 @@ A negative DTW reading may indicate groundwater emerging above the surface in th
 
 
 ```{r, message= FALSE, warning = FALSE, echo = FALSE}
-cases = data.frame(cases = c('1a', '1b', '1c', '1d', '2a', '2b', '2c', '3a', '3b'), wells = c(3, 0, 6, 0, 0, 0, 3, 0, 1))
 
-knitr::kable(cases, caption = 'Negative wells in Arizona',
-             col.names = c('Cases', 'Occurances'))
+
+
+cases = data.frame(cases = c('1A', '1B', '1C', '1D', '2A', '2B', '2C', '3A', '3B'), wells = c(3, 0, 6, 0, 0, 0, 3, 0, 1))
+
+
+
+cases[2] <- cell_spec(cases[[2]], color = "black", bold = T)
+    # background = spec_color(1:4, end = 0.9, option = "D", direction = 1))
+
+kbl(cases, col.names = c('Case', 'Count'), escape = F, align = "c") %>%
+  kable_material(c("striped", "hover")) %>% 
+  kable_styling(position = "center")
+
 ```
 ### **Negative DTW plots**
 

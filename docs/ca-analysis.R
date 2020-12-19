@@ -14,18 +14,20 @@ library(RColorBrewer)
 source("docs/utils.R")
 
 
-saveRDS(join_time, file = 'data/ca/ca-join-all.rds')
-saveRDS(join_spatial, file = 'data/ca/ca-join-spatial.rds')
 
-join_spatial = join_spatial %>%
-  mutate(time_span = max(year) - min(year))
+# 
+# join_spatial = join_spatial %>%
+#   mutate(time_span = max(year) - min(year))
+# 
+# join_spatial = join_spatial %>% 
+#   select(wellid, date, dtw, gw_elev,
+#                                  year, date_min, date_max,
+#                                  source, measurement_dist, year_dist, time_span,
+#                                  measure_period, county,
+#                                  dec_date, site_id = site_id.x)
 
-join_spatial = join_spatial %>% 
-  select(wellid, date, dtw, gw_elev,
-                                 year, date_min, date_max,
-                                 source, measurement_dist, year_dist, time_span,
-                                 measure_period, county,
-                                 dec_date, site_id = site_id.x)
+# saveRDS(join_time, file = 'data/ca/ca-join-all.rds')
+# saveRDS(join_spatial, file = 'data/ca/ca-join-spatial.rds')
 
 #################################################################
 ######################### THRESHOLD #############################

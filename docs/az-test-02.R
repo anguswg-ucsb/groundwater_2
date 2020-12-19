@@ -89,6 +89,35 @@ join_spatial = join_spatial %>% filter(wellid %in% join_time$wellid)
 #   mutate(time_span = max(year) - min(year))
 # join_spatial = join_spatial %>%
 #   mutate(time_span = max(year) - min(year))
+
+
+################## AVERAGE DTW + MIN/MAX DTW + ARRANGE COLUMNS ########################
+# join_time = join_time %>% 
+#   group_by(wellid) %>% 
+#   mutate(avg_dtw = mean(dtw)) %>% 
+#   mutate(min_dtw = min(dtw), max_dtw = max(dtw))
+# 
+# tmp_time = join_time %>% 
+#   group_by(wellid) %>% 
+#   mutate(avg_dtw = mean(dtw)) %>% 
+#   mutate(min_dtw = min(dtw), max_dtw = max(dtw)) %>% 
+#   arrange(desc(date)) %>%
+#   slice(n =1)
+# 
+# join_spatial = tmp_time %>% st_as_sf(coords = c('lng', 'lat'), crs = 4269) %>%
+#   st_transform(5070)
+# 
+# #                                  year, date_min, date_max, id,
+# #                                  measurement_dist, year_dist, measure_period,
+# #                                  lat, lng, dec_date, site_id)
+# join_spatial = join_spatial %>% select(wellid, source, date, dtw,
+#                                        avg_dtw, min_dtw, max_dtw, measurement_dist,
+#                                        year_dist, measure_period, time_span, year, date_min, date_max, dec_date)
+# 
+# join_time = join_time %>% select(wellid, source, date, dtw,
+#                                  avg_dtw, min_dtw, max_dtw, measurement_dist,
+#                                  year_dist, measure_period, time_span, year, date_min, date_max, dec_date, lat, lng)
+
 # saveRDS(join_time, file = 'data/join_time.rds')
 # saveRDS(join_spatial, file = 'data/join_spatial.rds')
 

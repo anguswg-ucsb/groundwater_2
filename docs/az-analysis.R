@@ -16,6 +16,8 @@ source("docs/utils.R")
 # usgs_time = readRDS("data/usgs-time.rds")
 # state = readRDS('data/state-unique-site.rds')
 # state_time = readRDS('data/state-time.rds')
+# saveRDS(join_time, file = 'data/az/az-join-time.rds')
+# saveRDS(join_spatial, file = 'data/az/az-join-spatial.rds')
 
 join_time = readRDS("data/az/az-join-time.rds")
 join_spatial = readRDS('data/az/az-join-spatial.rds')
@@ -34,6 +36,19 @@ join_spatial = join_spatial %>%
   filter(!wellid %in% thresh$wellid) %>%
   filter(measurement_dist >= 10)
 
+
+################################################
+#################### TEMP ######################
+################################################
+
+
+tmp2 = join_spatial %>% 
+  arrange(date)
+tmp1 = tmp1 %>% group_by(wellid) %>% 
+  arrange(desc(date)) %>%
+  slice(n =1)
+
+tmp2 = left_join(join_spatial, select(tmp1, wellid, avg_dtw, min_dtw, max_dtw), by = 'wellid')
 
 
 ################################################
