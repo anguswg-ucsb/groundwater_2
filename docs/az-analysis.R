@@ -9,6 +9,7 @@ library(USAboundaries)
 library(sp)
 library(leaflet)
 library(plotly)
+library(RColorBrewer)
 
 source("docs/utils.R")
 
@@ -23,18 +24,18 @@ join_time = readRDS("data/az/az-join-time.rds")
 join_spatial = readRDS('data/az/az-join-spatial.rds')
 
 # FILTER BY THRESHOLD - atleast 10 measurements and atleast 1 measurement every 5 years
-thresh = join_time %>% 
-  group_by(wellid) %>% 
-  mutate(measure_period = year - lag(year)) %>%
-  filter(measure_period > 5)
-
-join_time = join_time %>% 
-  filter(!wellid %in% thresh$wellid, measurement_dist >= 10) %>%
-  mutate(measure_period = year - lag(year))
-
-join_spatial = join_spatial %>%
-  filter(!wellid %in% thresh$wellid) %>%
-  filter(measurement_dist >= 10)
+# thresh = join_time %>% 
+#   group_by(wellid) %>% 
+#   mutate(measure_period = year - lag(year)) %>%
+#   filter(measure_period > 5)
+# 
+# join_time = join_time %>% 
+#   filter(!wellid %in% thresh$wellid, measurement_dist >= 10) %>%
+#   mutate(measure_period = year - lag(year))
+# 
+# join_spatial = join_spatial %>%
+#   filter(!wellid %in% thresh$wellid) %>%
+#   filter(measurement_dist >= 10)
 
 
 ################################################
@@ -42,13 +43,94 @@ join_spatial = join_spatial %>%
 ################################################
 
 
-tmp2 = join_spatial %>% 
+hist(join_time$avg_dtw, bteaks = 20)
+
+temp_az = temp2 %>% filter(wellid == c('6001', '5998', '814', '4261')) 
+
+temp_space = join_spatial %>% filter(wellid %in% temp_az$wellid) %>% 
+  st_transform(4326)
+
+join_time = join_time %>% group_by(wellid) %>% 
+  mutate(range = (max_dtw - min_dtw))
+
+join_time = join_time %>% select(wellid, source, date, dtw,
+                                       avg_dtw, min_dtw, max_dtw, range,
+                                      date_min, date_max, dec_date, year,
+                                      measurement_dist, year_dist, measure_period, time_span,
+                                              lat, lng)
+
+temp2 = join_time %>% 
+  filter(source == 'AZ', range >= 150, measurement_dist >= 20, time_span >= 40)
+
+temp3 = temp %>% 
+  filter(source == 'USGS', range >= 150, measurement_dist >= 20, time_span >= 40)
+plotMultipleWells(temp2)
+
+hist(temp$measurement_dist, breaks = 10) 
+hist(temp$time_span, breaks = 10) 
+hist(temp$measurement_dist, breaks = 10) 
+# join_time = join_time %>% select(wellid, source, date, dtw,
+#                                  avg_dtw, min_dtw, max_dtw, measurement_dist,
+#                                  year_dist, measure_period, time_span, year, date_min, date_max, dec_date, lat, lng)
+
+# ******* 5998, 6001, 6002 near Lake Powell ----> DTW from 500ft rises to ~ 150ft *******
+tmp = join_time %>% filter(wellid == c('6001', '5998', '814', '4261')) 
+ggplot(data = temp2) +
+  geom_pointrange(
+    mapping = aes(x = wellid, y = dtw),
+    stat = "summary",
+    fun.min = min,
+    fun.max = max,
+    fun = median
+  )
+
+
+
+plotWell(join_time, 6001)
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron, group = 'Base') %>% 
+  addProviderTiles(providers$Esri.WorldTopoMap, group = "Terrain") %>% 
+  addPolygons(data = ama2,
+              fillColor  = ~pals3(OBJECTID),
+              fillOpacity = 0.5,
+              color = 'black',
+              weight = 1,
+              label = ~MAP_LABEL, group = 'AMA') %>%
+  addCircleMarkers(data = temp_space, #clusterOptions = markerClusterOptions(interactive()),
+                   radius = 4,
+                   fillColor = ~pals2(dtw), 
+                   fillOpacity = .8, 
+                   color = 'black',
+                   # color = ifelse(r1$source == 'USGS', 'black', NA),
+                   opacity = .8, 
+                   weight = .5,
+                   stroke = T,
+                   popup = leafpop::popupTable(temp_space, feature.id = FALSE,
+                                               row.numbers = FALSE), group = 'ADWR') %>% 
+  addLayersControl(overlayGroups = c('USGS', 'ADWR', 'Negative depths', 'AMA', 'Aquifer'),
+                   options = layersControlOptions(collapsed = FALSE),
+                   baseGroups = c("Base", 'Terrain')) %>% 
+  addLegend(pal = pals2,
+            values = c(0, 1500),
+            opacity = .9,
+            title = 'Depth to water (ft)', # Title
+            position = "bottomleft",
+            labFormat = function(type, cuts, p) {
+              paste0(labels)}) 
+
+########################### ADD RANGE COLUMN TO JOIN SPATIAL ##############################
+tmp2 = join_spatial %>%
   arrange(date)
-tmp1 = tmp1 %>% group_by(wellid) %>% 
-  arrange(desc(date)) %>%
+tmp1 = join_time %>% group_by(wellid) %>%
+  arrange(date) %>%
   slice(n =1)
 
-tmp2 = left_join(join_spatial, select(tmp1, wellid, avg_dtw, min_dtw, max_dtw), by = 'wellid')
+join_spatial = left_join(join_spatial, select(tmp1, wellid, range), by = 'wellid')
+
+join_spatial = join_spatial %>% select(wellid, source, date, dtw,
+                                 avg_dtw, min_dtw, max_dtw, range,
+                                 date_min, date_max, dec_date, year,
+                                 measurement_dist, year_dist, measure_period, time_span)
 
 
 ################################################
@@ -250,7 +332,7 @@ box = az %>% st_transform(4326) %>%
 temp = st_intersects(aquifer2, box)
 
 aquifer2 = aquifer2[which(lengths(temp) != 0), ]
-
+library(RColorBrewer)
 
 # COLOR PALLETES 
 #RColorBrewer::display.brewer.all(n=4, exact.n=FALSE)
@@ -276,7 +358,7 @@ labels = c('0', '100', '200',
            '500', '600',
            '700', '800', '900', '1000')
 agency_labs = c('ADWR', 'USGS')
-
+plotWell(join_time, 5998)
 
 adwr_spatial = x %>% 
   filter(source == 'AZ')

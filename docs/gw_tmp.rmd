@@ -42,7 +42,7 @@ source("../docs/utils.R")
 <br>
 
 # **Measurement threshold** *(1920 - 2019)*
-A minimum threshold of 10 distinct measurements with at least 1 measurement every 5 years was applied to filter for only regularly monitored wells 
+> A minimum threshold of 10 distinct measurements with at least 1 measurement every 5 years was applied to filter for only regularly monitored wells 
 
 ***
 
@@ -218,8 +218,111 @@ leaflet() %>%
 ```
 
 
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
 
 
+
+# **Range in average well depth**
+
+***
+
+> The following plots display wells that have at least 40 years of records and also have at least 100 ft difference between there minumum and maximum depth measurements
+
+<br>
+<br>
+
+## Arizona Department of Water Resources
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+font = list(
+  family = 'Courier',
+  size = 15,
+  color = 'white')
+label = list(
+  bgcolor = '#232F34',
+  bordercolor = 'transparent',
+  font = font)
+
+az_range = join_time %>% 
+  filter(source == 'AZ', range >= 150, measurement_dist >= 20, time_span >= 40)
+
+az_gg = ggplot(data = az_range) +
+  geom_pointrange(
+    mapping = aes(x = wellid, y = dtw),
+    stat = "summary",
+    fun.min = min,
+    fun.max = max,
+    fun = median) +
+  labs(x = 'Year',
+       y = 'DTW (ft)',
+       col = 'Well') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16))
+
+az_plotly = ggplotly(az_gg, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE))
+az_plotly
+
+```
+
+<br>
+<br>
+<br>
+<br>
+
+## USGS
+
+***
+
+```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
+font = list(
+  family = 'Courier',
+  size = 15,
+  color = 'white')
+label = list(
+  bgcolor = '#232F34',
+  bordercolor = 'transparent',
+  font = font)
+
+usgs_range = join_time %>% 
+  filter(source == 'USGS', range >= 100, measurement_dist >= 20, time_span >= 40)
+
+usgs_gg = ggplot(data = usgs_range) +
+  geom_pointrange(
+    mapping = aes(x = wellid, y = dtw),
+    stat = "summary",
+    fun.min = min,
+    fun.max = max,
+    fun = median) +
+  labs(x = 'Year',
+       y = 'DTW (ft)',
+       col = 'Well') +
+  theme(plot.title = element_text(face = 'bold',color = 'black', size = 18, hjust = 0.5), 
+        axis.text.x = element_text(color="black", size=14), 
+        axis.text.y = element_text(color="black", size=14), 
+        axis.title.x = element_text(face="bold", color="black", size=16), 
+        axis.title.y = element_text(face="bold", color="black", size=16))
+
+usgs_plotly = ggplotly(usgs_gg, tooltip = c('x', 'y', 'wellid')) %>%
+  style(hoverlabel = label) %>% 
+  layout(font = font, 
+         yaxis = list(fixedrange = TRUE))
+usgs_plotly
+
+```
 
 ***
 
@@ -231,7 +334,7 @@ leaflet() %>%
 <br>
 
 # **Active Management Areas**
-The 1980 Arizona Groundwater code established 8 Active management areas (AMA) in areas heavily reliant on mined groundwater. The goal of the AMAs is too achieve safe yield groundwater usage in these heavy groundwater pumping areas.
+> The 1980 Arizona Groundwater code established 8 Active management areas (AMA) in areas heavily reliant on mined groundwater. The goal of the AMAs is too achieve safe yield groundwater usage in these heavy groundwater pumping areas.
 
 ---
 
@@ -239,7 +342,7 @@ The 1980 Arizona Groundwater code established 8 Active management areas (AMA) in
 <br>
 <br>
 
-## **Joseph City AMA**
+## Joseph City AMA
 
 ---
 
@@ -279,7 +382,7 @@ joseph_ggplotly
 <br>
 <br>
 
-## **Prescott AMA**
+## Prescott AMA
 
 ---
 
@@ -318,7 +421,7 @@ prescott_ggplotly
 <br>
 <br>
 
-## **Pheonix AMA**
+## Pheonix AMA
 
 ---
 
@@ -359,7 +462,7 @@ ggplotly(plot_test3, tooltip = c('x', 'y', 'wellid')) %>%
 <br>
 <br>
 
-## **Harquahala AMA**
+## Harquahala AMA
 
 ---
 
@@ -398,7 +501,7 @@ harq_ggplotly
 <br>
 <br>
 
-## **Pinal AMA**
+## Pinal AMA
 
 ---
 
@@ -438,7 +541,7 @@ pinal_ggplotly
 <br>
 <br>
 
-## **Tucson AMA**
+## Tucson AMA
 
 ---
 
@@ -484,7 +587,7 @@ tucson_ggplotly
 <br>
 <br>
 
-## **Douglas AMA**
+## Douglas AMA
 
 ---
 
@@ -523,7 +626,7 @@ douglas_ggplotly
 <br>
 <br>
 
-## **Santa Cruz AMA**
+## Santa Cruz AMA
 
 ---
 
@@ -574,7 +677,7 @@ santacruz_ggplotly
 
 ***
 
-Investigation of wells below 300ft in which depth has continually decreased. The first plot shows all wells within a certain depth range that have had continuous measurement records for over 50 years. The following plots focus on a specific well in that range, and then a buffer was formed around these wells (12 - 20 km) to then see what is happening to other wells within the same area. The buffer analysis was used on individual wells that displayed dramatic and continual decreases in depth to water.  
+> Investigation of wells below 300ft in which depth has continually decreased. The first plot shows all wells within a certain depth range that have had continuous measurement records for over 50 years. The following plots focus on a specific well in that range, and then a buffer was formed around these wells (12 - 20 km) to then see what is happening to other wells within the same area. The buffer analysis was used on individual wells that displayed dramatic and continual decreases in depth to water.  
 
 
 <br>
@@ -594,7 +697,7 @@ cont_records = join_time %>%
 
 ```
 
-## **Range: 300 - 500 ft**
+## Range: 300 - 500 ft
 
 ***
 
@@ -609,7 +712,7 @@ plotRange(cont2, 300, 500)
 <br>
 <br>
 
-### **Well 4573**
+### Well 4573
 
 ***
 
@@ -633,7 +736,7 @@ ggplotly(f)
 <br>
 
 
-### **Well 4740**
+### Well 4740
 
 ***
 
@@ -646,7 +749,7 @@ plotBuffer(join_spatial, 4740, 12500)
 <br>
 <br>
 
-### **Well 3472**
+### Well 3472
 
 ***
 
@@ -660,7 +763,7 @@ plotBuffer(join_spatial, 3472, 12500)
 <br>
 <br>
 
-## **Range: 400 - 500 ft**
+## Range: 400 - 500 ft
 
 ***
 
@@ -673,7 +776,7 @@ plotRange(cont_records, 400, 500)
 <br>
 <br>
 
-### **Well 4401**
+### Well 4401
 
 ***
 
@@ -687,7 +790,7 @@ plotBuffer(join_spatial, 4401, 12500)
 <br>
 
 
-### **Well 4182**
+### Well 4182
 
 ***
 
@@ -700,7 +803,7 @@ plotBuffer(join_spatial, 4182, 12500)
 <br>
 <br>
 
-## **Range: 500 - 600 ft** 
+## Range: 500 - 600 ft
 
 ***
 
@@ -714,7 +817,7 @@ plotRange(cont_records, 500, 600)
 <br>
 <br>
 
-### **Well 4993**
+### Well 4993
 
 ***
 
@@ -727,7 +830,7 @@ plotBuffer(join_spatial, 4993, 20000)
 <br>
 <br>
 
-### **Well 5730**
+### Well 5730
 
 ***
 
@@ -739,7 +842,7 @@ plotBuffer(join_spatial, 5730, 30000)
 <br>
 <br>
 
-### **Well 4953**
+### Well 4953
 
 ***
 
@@ -751,7 +854,7 @@ plotBuffer(join_spatial, 4953, 12500)
 <br>
 <br>
 
-### **Well 1853**
+### Well 1853
 
 ***
 
@@ -763,7 +866,7 @@ plotBuffer(join_spatial, 1853, 20000)
 <br>
 <br>
 
-### **Well 5743**
+### Well 5743
 
 ***
 
@@ -783,9 +886,12 @@ plotBuffer(join_spatial, 5743, 20000)
 
 ***
 
-A negative DTW reading may indicate groundwater emerging above the surface in the form of a spring. There are 9 wells that recorded negative depth to water readings. In the area of Chino Valley there are 6 wells with negative DTW to water readings all within a 5 km radius of one another. They other 3 wells are located in the far southeast corner of Arizona, nearing the US-Mexico border.
+> A negative DTW reading may indicate groundwater emerging above the surface in the form of a spring. There are 9 wells that recorded negative depth to water readings. In the area of Chino Valley there are 6 wells with negative DTW to water readings all within a 5 km radius of one another. They other 3 wells are located in the far southeast corner of Arizona, nearing the US-Mexico border.
 
-## **Negative Case Rules**
+<br>
+<br>
+
+## Negative Case Rules
 
 ***
 
@@ -843,7 +949,7 @@ kbl(cases, col.names = c('Case', 'Count'), escape = F, align = "c") %>%
   kable_styling(position = "center")
 
 ```
-### **Negative DTW plots**
+
 
 
 ```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
@@ -910,12 +1016,15 @@ case_3b = neg_time %>% filter(case == '3B')
 <br>
 <br>
 <br>
+<br>
+<br>
 
 
-
-### **Cases**
+### Cases
 
 ***
+
+
 
 ```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
 
@@ -959,9 +1068,12 @@ case_3b = neg_time %>% filter(case == '3B')
 <br>
 <br>
 <br>
-
+<br>
+<br>
 
 ***
+
+
 
 ```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
     gg_1c = ggplot(data = case_1c, aes(x = date, y = dtw)) +
@@ -993,10 +1105,12 @@ case_3b = neg_time %>% filter(case == '3B')
 <br>
 <br>
 <br>
-
+<br>
+<br>
 
 
 ***
+
 
 ```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
   
@@ -1029,10 +1143,13 @@ case_3b = neg_time %>% filter(case == '3B')
 <br>
 <br>
 <br>
-
+<br>
+<br>
 
 
 ***
+
+
 
 ```{r, message= FALSE, warning = FALSE, echo = FALSE, out.width = "100%"}
   
@@ -1069,7 +1186,7 @@ case_3b = neg_time %>% filter(case == '3B')
 <br>
 
 
-### **Chino Valley**
+### Chino Valley
 
 ***
 
@@ -1093,7 +1210,7 @@ plotNegativeWells(near_time4)
 <br>
 <br>
 
-# **Functions**
+# Functions
 
 ***
 

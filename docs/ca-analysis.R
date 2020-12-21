@@ -15,19 +15,7 @@ source("docs/utils.R")
 
 
 
-# 
-# join_spatial = join_spatial %>%
-#   mutate(time_span = max(year) - min(year))
-# 
-# join_spatial = join_spatial %>% 
-#   select(wellid, date, dtw, gw_elev,
-#                                  year, date_min, date_max,
-#                                  source, measurement_dist, year_dist, time_span,
-#                                  measure_period, county,
-#                                  dec_date, site_id = site_id.x)
 
-# saveRDS(join_time, file = 'data/ca/ca-join-all.rds')
-# saveRDS(join_spatial, file = 'data/ca/ca-join-spatial.rds')
 
 #################################################################
 ######################### THRESHOLD #############################
@@ -58,19 +46,20 @@ counties = us_counties() %>%
 tmp1 = usgs_spatial %>% 
   st_transform(5070)
 
+
+gg_tmp = ggplot() +
+  geom_sf(data = ca) +
+  geom_sf(data = counties, size = .5) +
+  geom_sf(data = tmp3, aes(col = dtw))
+
+ggplotly(gg_tmp)
+
+
 county_tmp = counties %>% select(name)
 
-county_tmp2 = st_intersection(county_tmp, join_spatial) %>% 
-  st_drop_geometry()
-county_tmp2 = filter(wellid == 31575)
-
-join_spatial = left_join(join_spatial, select(join_time, wellid, time_span), by = "wellid") 
-
-tmp4 = join_time %>% 
-  group_by(wellid) %>% 
-  arrange(desc(date)) %>% 
-  slice(n =1)
-join_spatial = left_join(join_spatial, select(county_tmp2, wellid, name), by = "wellid") 
+county_tmp2 = st_intersection(county_tmp, join_spatial)
+county_tmp2 
+tmp_join = left_join(join_time, select(county_tmp2, wellid, name), by = "wellid") 
 joseph_outline = ama2 %>% 
   filter(OBJECTID == 1) 
 
@@ -81,12 +70,15 @@ joseph_wells = join_time %>% filter(wellid %in% joseph_shp$wellid)
 joseph_pts = join_spatial %>% filter(wellid %in% joseph_shp$wellid)
 
 
-gg_tmp = ggplot() +
-  geom_sf(data = ca) +
-  geom_sf(data = counties, size = .5) +
-  geom_sf(data = tmp3, aes(col = dtw))
 
-ggplotly(gg_tmp)
+
+
+
+
+
+
+
+
 
 # 58730 ---- Corocoran
 plotBuffer(join_spatial, 58730, 20000)
